@@ -1,0 +1,39 @@
+# Bỏ qua các tệp và thư mục được tạo bởi hệ thống
+.DS_Store
+Thumbs.db
+
+# Bỏ qua thư mục node_modules
+node_modules/
+
+# Bỏ qua các tệp log
+*.log
+
+# Bỏ qua thư mục build và dist
+build/
+dist/
+
+# Bỏ qua các tệp cấu hình cá nhân
+.env
+.env.local
+.env.*.local
+
+# Bỏ qua các tệp tạm thời
+*.tmp
+*.temp
+
+# Bỏ qua các tệp backup
+*.bak
+*.backup
+
+# Bỏ qua các tệp IDE và trình soạn thảo
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Bỏ qua các tệp cấu hình npm và yarn
+package-lock.json
+yarn.lock
+
+# Bỏ qua thư mục coverage
+coverage/
