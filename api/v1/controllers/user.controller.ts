@@ -64,15 +64,15 @@ export const loginUser = async (req: Request, res: Response) => {
         message: "Invalid password",
       });
     }
-    if (!user.token) {
-      const token = generateToken();
-      await User.updateOne({ email }, { token: token });
-    }
+
+    // Always generate a new token and update it in the database
+    const token = generateToken();
+    await User.updateOne({ email }, { token: token });
 
     res.status(200).json({
       code: 200,
       message: "Login successfully",
-      token: user.token,
+      token: token, // Return the new token
     });
   } catch (error) {
     res.status(500).json({
