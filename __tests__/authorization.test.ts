@@ -1,55 +1,36 @@
-import mongoose from "mongoose";
-import { MongoMemoryServer } from "mongodb-memory-server";
 import request from "supertest";
 import express from "express";
 import apiV1Routes from "../api/v1/routes/index.route";
-import User from "../api/v1/models/user.model";
 import Task from "../api/v1/models/task.model";
-import bcrypt from "bcrypt";
+import { connectDB, disconnectDB } from "./helpers/database.helper";
+import { createUserAndLogin } from "./helpers/auth.helper";
 
 const app = express();
 app.use(express.json());
 apiV1Routes(app);
 
-let mongoServer: MongoMemoryServer;
 let adminToken: string;
 let memberToken: string;
-let memberUserId: any;
 let taskId: any;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  const mongoUri = mongoServer.getUri();
-  await mongoose.connect(mongoUri);
+  await connectDB();
 
-  // 1. Create admin and member users with hashed passwords
-  const password = await bcrypt.hash("password", 10);
-  const admin = await User.create({
-    fullName: "Admin User",
+  // 1. Create admin and member users and get tokens
+  const adminData = await createUserAndLogin(app, {
     email: "admin@test.com",
-    password: password,
     role: "admin",
   });
-  const member = await User.create({
-    fullName: "Member User",
+  adminToken = adminData.token;
+
+  const memberData = await createUserAndLogin(app, {
     email: "member@test.com",
-    password: password,
     role: "member",
   });
-  memberUserId = member._id;
+  memberToken = memberData.token;
+  const memberUserId = memberData.userId;
 
-  // 2. Login to get tokens (using original unhashed password)
-  const adminLoginRes = await request(app)
-    .post("/api/v1/user/login")
-    .send({ email: "admin@test.com", password: "password" });
-  adminToken = adminLoginRes.body.token;
-
-  const memberLoginRes = await request(app)
-    .post("/api/v1/user/login")
-    .send({ email: "member@test.com", password: "password" });
-  memberToken = memberLoginRes.body.token;
-
-  // 3. Create a task as the member user
+  // 2. Create a task as the member user
   const task = await Task.create({
     title: "Test Task",
     content: "A task to be deleted",
@@ -59,9 +40,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-  await mongoServer.stop();
+  await disconnectDB();
 });
 
 describe("Authorization Middleware", () => {

@@ -1,18 +1,14 @@
-import mongoose from "mongoose";
-import { MongoMemoryServer } from "mongodb-memory-server";
 import request from "supertest";
 import express from "express";
 import apiV1Routes from "../api/v1/routes/index.route";
-import User from "../api/v1/models/user.model";
 import Task from "../api/v1/models/task.model";
 import Comment from "../api/v1/models/comment.model";
-import bcrypt from "bcrypt";
+import { connectDB, disconnectDB } from "./helpers/database.helper";
+import { createUserAndLogin } from "./helpers/auth.helper";
 
 const app = express();
 app.use(express.json());
 apiV1Routes(app);
-
-let mongoServer: MongoMemoryServer;
 
 // User variables
 let authorToken: string, otherUserToken: string, adminToken: string;
@@ -23,46 +19,30 @@ let taskId: any;
 let commentId: any;
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  await mongoose.connect(mongoServer.getUri());
+  await connectDB();
 
   // 1. Setup users
-  const password = await bcrypt.hash("password", 10);
-  const author = await User.create({
-    fullName: "Comment Author",
+  const authorData = await createUserAndLogin(app, {
     email: "author@test.com",
-    password,
-    role: "member",
+    fullName: "Comment Author",
   });
-  await User.create({
-    fullName: "Other User",
+  authorToken = authorData.token;
+  authorId = authorData.userId;
+
+  const otherUserData = await createUserAndLogin(app, {
     email: "other@test.com",
-    password,
-    role: "member",
+    fullName: "Other User",
   });
-  await User.create({
-    fullName: "Admin User",
+  otherUserToken = otherUserData.token;
+
+  const adminData = await createUserAndLogin(app, {
     email: "admin-comment@test.com",
-    password,
+    fullName: "Admin User",
     role: "admin",
   });
-  authorId = author._id;
+  adminToken = adminData.token;
 
-  // 2. Login users
-  const authorLoginRes = await request(app)
-    .post("/api/v1/user/login")
-    .send({ email: "author@test.com", password: "password" });
-  authorToken = authorLoginRes.body.token;
-  const otherUserLoginRes = await request(app)
-    .post("/api/v1/user/login")
-    .send({ email: "other@test.com", password: "password" });
-  otherUserToken = otherUserLoginRes.body.token;
-  const adminLoginRes = await request(app)
-    .post("/api/v1/user/login")
-    .send({ email: "admin-comment@test.com", password: "password" });
-  adminToken = adminLoginRes.body.token;
-
-  // 3. Setup a task and a comment
+  // 2. Setup a task and a comment
   const task = await Task.create({
     title: "Task for comments",
     content: "...",
@@ -78,9 +58,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await mongoose.connection.dropDatabase();
-  await mongoose.disconnect();
-  await mongoServer.stop();
+  await disconnectDB();
 });
 
 describe("Comments API", () => {

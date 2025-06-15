@@ -1,25 +1,19 @@
-import mongoose from "mongoose";
-import { MongoMemoryServer } from "mongodb-memory-server";
 import request from "supertest";
 import express from "express";
 import apiV1Routes from "../api/v1/routes/index.route"; // Adjust path if needed
+import { connectDB, disconnectDB } from "./helpers/database.helper";
 
 const app = express();
 app.use(express.json());
 // Initialize routes
 apiV1Routes(app);
 
-let mongoServer: MongoMemoryServer;
-
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
-  const mongoUri = mongoServer.getUri();
-  await mongoose.connect(mongoUri);
+  await connectDB();
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
-  await mongoServer.stop();
+  await disconnectDB();
 });
 
 describe("User API", () => {
