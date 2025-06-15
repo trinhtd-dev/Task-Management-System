@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Comment from "../models/comment.model";
 import Task from "../models/task.model";
+import Notification from "../models/notification.model";
 
 interface RequestWithUser extends Request {
   user?: any;
@@ -26,6 +27,18 @@ export const createComment = async (req: RequestWithUser, res: Response) => {
       taskId,
       userId,
     });
+
+    // Create notification for task owner
+    const taskOwnerId = task.createdBy.toString();
+    const commenterId = req.user.id.toString();
+
+    if (taskOwnerId !== commenterId) {
+      await Notification.create({
+        userId: taskOwnerId,
+        message: `${req.user.fullName} has commented on your task "${task.title}"`,
+        link: `/api/v1/task/detail/${taskId}`,
+      });
+    }
 
     res.status(201).json({
       code: 201,
