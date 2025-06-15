@@ -2,9 +2,10 @@ import express from "express";
 
 const router = express.Router();
 
-import * as taskController from "../controllers/task.controller";   
+import * as taskController from "../controllers/task.controller";
 
 import { authenticate } from "../../../middleware/authenticate";
+import { checkRole } from "../../../middleware/auth.middleware";
 
 router.use(authenticate);
 
@@ -16,11 +17,10 @@ router.post("/create", taskController.createTask);
 
 router.patch("/update/:id", taskController.updateTask);
 
-router.delete("/delete/:id", taskController.deleteTask);
+router.delete("/delete/:id", checkRole(["admin"]), taskController.deleteTask);
 
 router.patch("/update-status/:id", taskController.updateTaskStatus);
 
 router.patch("/update-multiple", taskController.updateMultipleTasks);
-
 
 export default router;
