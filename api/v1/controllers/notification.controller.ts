@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import Notification from "../models/notification.model";
 
 interface RequestWithUser extends Request {
