@@ -9,6 +9,7 @@ import User from "../models/user.model";
 import ForgotPassword from "../models/forgot-password";
 
 import { generateToken, generateOtp } from "../../../helpers/generate";
+import { sendMail } from "../../../helpers/mail.helper";
 
 // [POST] /api/v1/user/register
 export const registerUser = async (req: Request, res: Response) => {
@@ -94,10 +95,17 @@ export const forgotPassword = async (req: Request, res: Response) => {
       });
     }
     const otp = generateOtp();
-    const newForgotPassword = await ForgotPassword.create({
+    await ForgotPassword.create({
       email: email,
       otp: otp,
+      expiresAt: Date.now() + 3 * 60 * 1000, // OTP expires in 3 minutes
     });
+
+    // Send email
+    const subject = "OTP for password recovery";
+    const html = `Your OTP is: <b>${otp}</b>. It will expire in 3 minutes.`;
+    await sendMail(email, subject, html);
+
     res.status(200).json({
       code: 200,
       message: "Sent OTP to your email",
@@ -116,23 +124,31 @@ export const otp = async (req: Request, res: Response) => {
   try {
     const email = req.body.email;
     const otp = req.body.otp;
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({
-        code: 400,
-        message: "User not found",
-      });
-    }
-    const forgotPassword = await ForgotPassword.findOne({ email, otp });
-    if (!forgotPassword) {
+
+    const forgotPasswordRecord = await ForgotPassword.findOne({ email, otp });
+
+    if (!forgotPasswordRecord) {
       return res.status(400).json({
         code: 400,
         message: "OTP is invalid",
       });
     }
+
+    if (forgotPasswordRecord.expiresAt < new Date()) {
+      return res.status(400).json({
+        code: 400,
+        message: "OTP has expired",
+      });
+    }
+
+    const resetToken = generateToken(); // Generate a new single-use token
+    forgotPasswordRecord.token = resetToken;
+    await forgotPasswordRecord.save();
+
     res.status(200).json({
       code: 200,
-      message: "OTP is valid",
+      message: "OTP is valid. Use this token to reset your password.",
+      resetToken: resetToken,
     });
   } catch (error) {
     res.status(500).json({
@@ -144,34 +160,44 @@ export const otp = async (req: Request, res: Response) => {
 };
 
 // [POST] /api/v1/user/password/reset
-export const resetPassword = async (req: RequestWithUser, res: Response) => {
+export const resetPassword = async (req: Request, res: Response) => {
   try {
-    const password = req.body.password;
+    const { token, password } = req.body;
 
-    if (!req.headers.authorization) {
+    if (!token || !password) {
       return res.status(400).json({
         code: 400,
-        message: "Unauthorized",
+        message: "Token and password are required",
       });
     }
 
-    const token = req.headers.authorization.split(" ")[1];
-    const user = await User.findOne({ token });
+    const forgotPasswordRecord = await ForgotPassword.findOne({ token: token });
+
+    if (!forgotPasswordRecord) {
+      return res.status(400).json({
+        code: 400,
+        message: "Invalid or expired token",
+      });
+    }
+
+    const user = await User.findOne({ email: forgotPasswordRecord.email });
     if (!user) {
       return res.status(400).json({
         code: 400,
-        message: "Unauthorized",
+        message: "User not found",
       });
     }
+
     const hashedPassword = await bcrypt.hash(password, 10);
     await User.updateOne(
-      { token: token },
+      { _id: user._id },
       {
         password: hashedPassword,
-        token: null,
       }
     );
-    await ForgotPassword.deleteOne({ email: user.email });
+
+    // Delete the record after successful password reset
+    await ForgotPassword.deleteOne({ _id: forgotPasswordRecord._id });
 
     res.status(200).json({
       code: 200,
